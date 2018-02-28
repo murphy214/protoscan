@@ -19,6 +19,7 @@ using bufio.Scanner, Unmarshaling will be handled on your own of course.
 
 import (
     "bufio"
+    //"fmt"
     "io"
 )
 
@@ -108,12 +109,15 @@ func split(data []byte, atEOF bool) (advance int, token []byte, err error) {
 
         case Protobuf:
             // gets the protobuf
-            protobuf[position] = byteval
-            position++
-            if position == protobuf_size {
-                token = protobuf
-                state = Tag
-                boolval = true
+            if protobuf_size != 0 {
+                protobuf[position] = byteval
+                position++
+                if position == protobuf_size {
+                    token = protobuf
+                    state = Tag
+                    boolval = true
+                    position = 0
+                }
             }
         }
         pos++ 
