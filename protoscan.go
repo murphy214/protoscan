@@ -19,31 +19,41 @@ using bufio.Scanner, Unmarshaling will be handled on your own of course.
 
 import (
     "bufio"
-    //"fmt"
     "io"
+    //"fmt"
 )
 
 // the main struct for this repo
 type ProtobufScanner struct {
     Scanner *bufio.Scanner
+    BoolVal bool
 }
+
+var SizeBuffer = 4096
+
 
 // new protobuf scanner
 func NewProtobufScanner(ioreader io.Reader) *ProtobufScanner {
-    scanner := &ProtobufScanner{Scanner:bufio.NewScanner(ioreader)}
-    scanner.Scanner.Split(split)
-    return scanner
+    scanner := bufio.NewScanner(ioreader)
+    scanner.Split(split)
+    buf := make([]byte,SizeBuffer)
+    scanner.Buffer(buf,SizeBuffer)
+    scannerval := &ProtobufScanner{Scanner:scanner,BoolVal:true}
+    scannerval.Scanner.Split(split)
+    return scannerval
 }
 
 // returns a continutation bool
 func (scanner *ProtobufScanner) Scan() bool {
-    return scanner.Scanner.Scan()
+    
+    scanner.Get_Increment(0)
+    if EndBool {
+        return false
+    }
+    return scanner.BoolVal
 }
 
-// returns the next protobuf message in bytes
-func (scanner *ProtobufScanner) Protobuf() []byte {
-    return scanner.Scanner.Bytes()
-}
+
 
 
 const maxVarintBytes = 10 // maximum Length of a varint
@@ -68,61 +78,162 @@ func DecodeVarint(buf []byte) (int) {
     return 0
 }
 
-// the state of the protobuf as were only getting data in max 4096 byte chunks
-type State int
 
-// constants of state representing an enum essentially
-const (
-        Tag State = iota
-        Size
-        Protobuf
-)
+var TotalPosition int
 
-var state = Tag
-var size,protobuf []byte
-var position,protobuf_size int
+var increment int
+var EndBool = false
 
 // the split function that contains the logic for chunking a protobuf
-func split(data []byte, atEOF bool) (advance int, token []byte, err error) {
-    pos := 0
-    boolval := false
-    for pos < len(data) && boolval == false  {
-        byteval := data[pos]
+func split(data []byte, atEOF bool) (advance int, token []byte, err error) { 
+    if len(data) < increment {
+        token = make([]byte, increment)
+        copy(token, data[:increment])
+        //fmt.Println(token)
+        advance = len(data)
 
-        switch state {
-        case Tag:
-            // specifically handles the tag case
-            state = Size
-        case Size:
-            // handles getting size of the next protobuf
-            for data[pos] > 127 {
+    } else {
+        token = make([]byte, increment)
+        copy(token, data)        
+        advance = increment
 
-                size = append(size,data[pos])
-                pos++
-            } 
-            size = append(size,data[pos])
-            protobuf_size = DecodeVarint(size)
-            size = []byte{}
-            protobuf = make([]byte,protobuf_size)
-            position = 0
-            state = Protobuf
-
-        case Protobuf:
-            // gets the protobuf
-            if protobuf_size != 0 {
-                protobuf[position] = byteval
-                position++
-                if position == protobuf_size {
-                    token = protobuf
-                    state = Tag
-                    boolval = true
-                    position = 0
-                }
-            }
-        }
-        pos++ 
     }
-    advance = pos 
-
+    if atEOF {
+        EndBool = true
+    }
     return
 }
+
+var BufferPosition int
+
+// gets an increment
+func (scanner *ProtobufScanner) Get_Increment(step int) []byte {
+    // ensuring we only prime once
+    /*
+    if startbool == false {
+        increment = 1
+        scanner.Scanner.Bytes()
+        startbool = true
+    }
+    */
+    TotalPosition += step
+    
+
+    // getting how much buffer is left in each buffer
+    buffer_left := SizeBuffer - BufferPosition
+    /*
+    fmt.Println(step,"size")
+    fmt.Println(BufferPosition,"BufferPosition")
+    fmt.Println(buffer_left,"buffer left")
+    */
+    if step > SizeBuffer {
+        var newlist []byte
+        if BufferPosition != 0 {
+            //fmt.Println("nothere")
+            // toppign off buffer
+
+            increment = buffer_left
+            scanner.BoolVal = scanner.Scanner.Scan()
+            newlist = scanner.Scanner.Bytes()[:increment]
+            BufferPosition = 0
+            //fmt.Println(newlist,"here0")
+
+        } 
+
+        for len(newlist) != step {
+            remaining_bytes := step - len(newlist)
+            
+            //fmt.Println(remaining_bytes,"remainging")
+
+            //fmt.Println("here",remaining_bytes)
+            if remaining_bytes > SizeBuffer {
+                increment = SizeBuffer
+                scanner.BoolVal = scanner.Scanner.Scan()
+                tmpbytes := scanner.Scanner.Bytes()
+                //fmt.Println(tmpbytes,"here1")
+
+                //fmt.Println(increment,tmpbytes,"tmp1")
+                newlist = append(newlist,tmpbytes...)
+
+            } else {
+
+                increment = remaining_bytes
+                BufferPosition = BufferPosition + increment
+                scanner.BoolVal = scanner.Scanner.Scan()
+                tmpbytes := scanner.Scanner.Bytes()[:increment]
+
+                //fmt.Println(increment,tmpbytes,"tmp2")
+                newlist = append(newlist,tmpbytes...)
+                //fmt.Println(tmpbytes,"here2")
+
+            }
+
+        }
+        //fmt.Println(newlist,len(newlist),"done")
+        return newlist
+        
+
+    } else {
+        var newlist []byte
+        if buffer_left > step {
+            increment = step
+            scanner.BoolVal = scanner.Scanner.Scan()
+            newlist = scanner.Scanner.Bytes()[:increment]
+            BufferPosition = BufferPosition + increment
+            //fmt.Println(newlist,"here3")
+            //fmt.Println(BufferPosition,"bufpos")
+            //scanner.BoolVal = scanner.Scanner.Scan()
+
+        } else {
+            // toppign off buffer
+
+            increment = buffer_left
+
+            scanner.BoolVal = scanner.Scanner.Scan()
+            newlist = scanner.Scanner.Bytes()[:increment]
+            //fmt.Println(newlist,"here4")
+
+            //fmt.Println(newlist)
+
+            //fmt.Println(scanner.Scanner)
+            increment = step - buffer_left
+
+            //fmt.Println(scanner.Scanner)
+
+
+            buffer_left = 0
+            BufferPosition = increment
+            scanner.BoolVal = scanner.Scanner.Scan()
+            tmpbytes := scanner.Scanner.Bytes()[:increment]
+            newlist = append(newlist,tmpbytes...)
+            //fmt.Println(tmpbytes,"here5")
+
+            //fmt.Println(newlist,increment)
+        }
+        //fmt.Println(newlist,len(newlist),"done")
+        return newlist
+    }
+
+    return []byte{}
+    //fmt.Println(scanner.Scanner.Bytes())
+}
+
+func (scanner *ProtobufScanner) Protobuf() []byte {
+    // ignoring header value
+    size := scanner.Get_Increment(1)
+    // getting sizes 
+    size = scanner.Get_Increment(1)
+    size_bytes := []byte{size[0]}
+    if size[0] > 127 {
+        size = scanner.Get_Increment(1)
+        size_bytes = append(size_bytes,size[0])
+
+    }
+    //size_bytes = append(size_bytes,size[0])
+    // getting the size of the protobuf
+    size_protobuf := int(DecodeVarint(size_bytes))
+    //fmt.Println(size_protobuf,size_bytes)
+    // getting the protobuf
+    return scanner.Get_Increment(size_protobuf)
+}
+
