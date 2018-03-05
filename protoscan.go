@@ -70,6 +70,14 @@ func NewProtobufScanner(ioreader io.Reader) *ProtobufScanner {
     return scannerval
 }
 
+func (scanner *ProtobufScanner) Reset() {
+    scanner.increment = 0 
+    scanner.BoolVal = true
+    scanner.EndBool = false
+    scanner.TotalPosition = 0
+    scanner.BufferPosition = 0
+}
+
 // returns a continutation bool
 func (scanner *ProtobufScanner) Scan() bool {
     
