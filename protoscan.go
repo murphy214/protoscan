@@ -27,18 +27,45 @@ import (
 type ProtobufScanner struct {
     Scanner *bufio.Scanner
     BoolVal bool
+    EndBool bool
+    TotalPosition int
+    BufferPosition int
+    increment int
 }
 
-var SizeBuffer = 4096
+var SizeBuffer = 64 * 1028
+
+
 
 
 // new protobuf scanner
 func NewProtobufScanner(ioreader io.Reader) *ProtobufScanner {
     scanner := bufio.NewScanner(ioreader)
-    scanner.Split(split)
+    //scanner.Split(split)
     buf := make([]byte,SizeBuffer)
     scanner.Buffer(buf,SizeBuffer)
     scannerval := &ProtobufScanner{Scanner:scanner,BoolVal:true}
+    // the split function that contains the logic for chunking a protobuf
+    split := func(data []byte, atEOF bool) (advance int, token []byte, err error) { 
+        if len(data) < scannerval.increment {
+            token = make([]byte, scannerval.increment)
+            copy(token, data[:scannerval.increment])
+            //fmt.Println(token)
+            advance = len(data)
+
+        } else {
+            token = make([]byte, scannerval.increment)
+            copy(token, data)        
+            advance = scannerval.increment
+
+        }
+        if atEOF {
+            scannerval.EndBool = true
+        }
+        return
+    }
+
+
     scannerval.Scanner.Split(split)
     return scannerval
 }
@@ -47,7 +74,7 @@ func NewProtobufScanner(ioreader io.Reader) *ProtobufScanner {
 func (scanner *ProtobufScanner) Scan() bool {
     
     scanner.Get_Increment(0)
-    if EndBool {
+    if scanner.EndBool {
         return false
     }
     return scanner.BoolVal
@@ -79,11 +106,8 @@ func DecodeVarint(buf []byte) (int) {
 }
 
 
-var TotalPosition int
 
-var increment int
-var EndBool = false
-
+/*
 // the split function that contains the logic for chunking a protobuf
 func split(data []byte, atEOF bool) (advance int, token []byte, err error) { 
     if len(data) < increment {
@@ -103,8 +127,7 @@ func split(data []byte, atEOF bool) (advance int, token []byte, err error) {
     }
     return
 }
-
-var BufferPosition int
+*/
 
 // gets an increment
 func (scanner *ProtobufScanner) Get_Increment(step int) []byte {
@@ -116,11 +139,10 @@ func (scanner *ProtobufScanner) Get_Increment(step int) []byte {
         startbool = true
     }
     */
-    TotalPosition += step
-    
+    scanner.TotalPosition += step
 
     // getting how much buffer is left in each buffer
-    buffer_left := SizeBuffer - BufferPosition
+    buffer_left := SizeBuffer - scanner.BufferPosition
     /*
     fmt.Println(step,"size")
     fmt.Println(BufferPosition,"BufferPosition")
@@ -128,14 +150,14 @@ func (scanner *ProtobufScanner) Get_Increment(step int) []byte {
     */
     if step > SizeBuffer {
         var newlist []byte
-        if BufferPosition != 0 {
+        if scanner.BufferPosition != 0 {
             //fmt.Println("nothere")
             // toppign off buffer
 
-            increment = buffer_left
+            scanner.increment = buffer_left
             scanner.BoolVal = scanner.Scanner.Scan()
-            newlist = scanner.Scanner.Bytes()[:increment]
-            BufferPosition = 0
+            newlist = scanner.Scanner.Bytes()[:scanner.increment]
+            scanner.BufferPosition = 0
             //fmt.Println(newlist,"here0")
 
         } 
@@ -147,7 +169,7 @@ func (scanner *ProtobufScanner) Get_Increment(step int) []byte {
 
             //fmt.Println("here",remaining_bytes)
             if remaining_bytes > SizeBuffer {
-                increment = SizeBuffer
+                scanner.increment = SizeBuffer
                 scanner.BoolVal = scanner.Scanner.Scan()
                 tmpbytes := scanner.Scanner.Bytes()
                 //fmt.Println(tmpbytes,"here1")
@@ -157,10 +179,10 @@ func (scanner *ProtobufScanner) Get_Increment(step int) []byte {
 
             } else {
 
-                increment = remaining_bytes
-                BufferPosition = BufferPosition + increment
+                scanner.increment = remaining_bytes
+                scanner.BufferPosition = scanner.BufferPosition + scanner.increment
                 scanner.BoolVal = scanner.Scanner.Scan()
-                tmpbytes := scanner.Scanner.Bytes()[:increment]
+                tmpbytes := scanner.Scanner.Bytes()[:scanner.increment]
 
                 //fmt.Println(increment,tmpbytes,"tmp2")
                 newlist = append(newlist,tmpbytes...)
@@ -176,10 +198,10 @@ func (scanner *ProtobufScanner) Get_Increment(step int) []byte {
     } else {
         var newlist []byte
         if buffer_left > step {
-            increment = step
+            scanner.increment = step
             scanner.BoolVal = scanner.Scanner.Scan()
-            newlist = scanner.Scanner.Bytes()[:increment]
-            BufferPosition = BufferPosition + increment
+            newlist = scanner.Scanner.Bytes()[:scanner.increment]
+            scanner.BufferPosition = scanner.BufferPosition + scanner.increment
             //fmt.Println(newlist,"here3")
             //fmt.Println(BufferPosition,"bufpos")
             //scanner.BoolVal = scanner.Scanner.Scan()
@@ -187,24 +209,24 @@ func (scanner *ProtobufScanner) Get_Increment(step int) []byte {
         } else {
             // toppign off buffer
 
-            increment = buffer_left
+            scanner.increment = buffer_left
 
             scanner.BoolVal = scanner.Scanner.Scan()
-            newlist = scanner.Scanner.Bytes()[:increment]
+            newlist = scanner.Scanner.Bytes()[:scanner.increment]
             //fmt.Println(newlist,"here4")
 
             //fmt.Println(newlist)
 
             //fmt.Println(scanner.Scanner)
-            increment = step - buffer_left
+            scanner.increment = step - buffer_left
 
             //fmt.Println(scanner.Scanner)
 
 
             buffer_left = 0
-            BufferPosition = increment
+            scanner.BufferPosition = scanner.increment
             scanner.BoolVal = scanner.Scanner.Scan()
-            tmpbytes := scanner.Scanner.Bytes()[:increment]
+            tmpbytes := scanner.Scanner.Bytes()[:scanner.increment]
             newlist = append(newlist,tmpbytes...)
             //fmt.Println(tmpbytes,"here5")
 
