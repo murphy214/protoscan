@@ -20,7 +20,7 @@ using bufio.Scanner, Unmarshaling will be handled on your own of course.
 import (
     "bufio"
     "io"
-    "fmt"
+    //"fmt"
 )
 
 // the main struct for this repo
@@ -261,7 +261,6 @@ func (scanner *ProtobufScanner) Protobuf() []byte {
     }
     //size_bytes = append(size_bytes,size[0])
     // getting the size of the protobuf
-    fmt.Println(size_bytes)
     size_protobuf := int(DecodeVarint(size_bytes))
     //fmt.Println(size_protobuf,size_bytes)
     // getting the protobuf
