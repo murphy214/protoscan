@@ -1,4 +1,5 @@
 # protoscan
+[![GoDoc](https://img.shields.io/badge/api-reference-blue.svg?style=flat-square)](https://godoc.org/github.com/murphy214/protoscan)
 
 # What is it?
 
